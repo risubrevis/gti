@@ -1,0 +1,26 @@
+# Rust build artifacts
+/target/
+
+# Cargo.lock for binary crates (git handles it for libraries)
+/Cargo.lock
+
+# Build script output (regenerated automatically)
+# Note: OUT_DIR is inside target/, so already covered
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+.warp/
+.zed/
+*.iml
+
+# Python cache (used by convert.py)
+__pycache__/
+*.pyc

@@ -1,0 +1,172 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Linux: .deb, .rpm, .tar.gz ─────────────────────────────────────
+  build-linux:
+    name: Linux (.deb, .rpm, .tar.gz)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install packaging tools
+        run: cargo install cargo-deb cargo-generate-rpm
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Package .deb
+        run: cargo deb
+
+      - name: Package .rpm
+        run: cargo generate-rpm
+
+      - name: Create Linux .tar.gz
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          tar czf "gti-${VERSION}-linux-x86_64.tar.gz" -C target/release gti
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            target/debian/*.deb
+            target/generate-rpm/*.rpm
+            gti-*.tar.gz
+
+  # ── Arch Linux: .pkg.tar.zst ──────────────────────────────────────
+  build-arch:
+    name: Arch Linux (.pkg.tar.zst)
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Su --noconfirm
+          pacman -S --noconfirm base-devel rust sudo
+
+      - name: Build release binary
+        run: cargo build --release --locked
+
+      - name: Create Arch package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKGVER="${VERSION/-/_}"
+          WORKSPACE="${GITHUB_WORKSPACE}"
+
+          # makepkg refuses to run as root — create a build user
+          useradd -m -G wheel builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+
+          # Write PKGBUILD (quoted heredoc prevents shell expansion;
+          # @...@ placeholders are substituted by sed afterwards)
+          mkdir -p /tmp/gti-pkg
+          cat > /tmp/gti-pkg/PKGBUILD << 'PKGBUILDEOF'
+          pkgname=gti
+          pkgver=@PKGVER@
+          pkgrel=1
+          pkgdesc="A typo-triggered dancing ASCII animation that delegates to git"
+          arch=('x86_64')
+          url="https://github.com/risubrevis/gti"
+          license=('MIT')
+          depends=('gcc-libs')
+
+          build() {
+            :
+          }
+
+          package() {
+            install -Dm755 "@WORKSPACE@/target/release/gti" "$pkgdir/usr/bin/gti"
+          }
+          PKGBUILDEOF
+
+          sed -i "s/@PKGVER@/${PKGVER}/" /tmp/gti-pkg/PKGBUILD
+          sed -i "s|@WORKSPACE@|${WORKSPACE}|g" /tmp/gti-pkg/PKGBUILD
+
+          chown -R builder:builder /tmp/gti-pkg
+          chmod -R a+rX "${WORKSPACE}/target/release/gti"
+
+          cd /tmp/gti-pkg
+          sudo -u builder makepkg -sf --noconfirm
+
+          cp /tmp/gti-pkg/*.pkg.tar.zst "${WORKSPACE}/"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: "*.pkg.tar.zst"
+
+  # ── macOS: .tar.gz (x86_64 + aarch64) ─────────────────────────────
+  build-macos:
+    name: macOS (${{ matrix.target }})
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package .tar.gz
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          ARCH="${{ matrix.target }}"
+          ARCH="${ARCH%-apple-darwin}"
+          tar czf "gti-${VERSION}-macos-${ARCH}.tar.gz" \
+            -C "target/${{ matrix.target }}/release" gti
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-package-${{ matrix.target }}
+          path: gti-*.tar.gz
+
+  # ── Publish GitHub Release ───────────────────────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: [build-linux, build-arch, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \
+            \( -name "*.deb" -o -name "*.rpm" -o -name "*.pkg.tar.zst" -o -name "gti-*.tar.gz" \) \
+            -exec cp -v {} release/ \;
+          cd release && sha256sum * > ../SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release/*
+            SHA256SUMS.txt
