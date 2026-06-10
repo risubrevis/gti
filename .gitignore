@@ -2,7 +2,6 @@
 /target/
 
 # Cargo.lock for binary crates (git handles it for libraries)
-/Cargo.lock
 
 # Build script output (regenerated automatically)
 # Note: OUT_DIR is inside target/, so already covered
