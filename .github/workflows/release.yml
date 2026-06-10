@@ -73,30 +73,26 @@ jobs:
           useradd -m -G wheel builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
 
-          # Write PKGBUILD (quoted heredoc prevents shell expansion;
-          # @...@ placeholders are substituted by sed afterwards)
+          # Write PKGBUILD (no indentation inside → safe for makepkg parser)
           mkdir -p /tmp/gti-pkg
-          cat > /tmp/gti-pkg/PKGBUILD << 'PKGBUILDEOF'
-          pkgname=gti
-          pkgver=@PKGVER@
-          pkgrel=1
-          pkgdesc="A typo-triggered dancing ASCII animation that delegates to git"
-          arch=('x86_64')
-          url="https://github.com/risubrevis/gti"
-          license=('MIT')
-          depends=('gcc-libs')
-
-          build() {
-            :
-          }
-
-          package() {
-            install -Dm755 "@WORKSPACE@/target/release/gti" "$pkgdir/usr/bin/gti"
-          }
-          PKGBUILDEOF
-
-          sed -i "s/@PKGVER@/${PKGVER}/" /tmp/gti-pkg/PKGBUILD
-          sed -i "s|@WORKSPACE@|${WORKSPACE}|g" /tmp/gti-pkg/PKGBUILD
+          printf '%s\n' \
+            'pkgname=gti' \
+            "pkgver=${PKGVER}" \
+            'pkgrel=1' \
+            'pkgdesc="A typo-triggered dancing ASCII animation that delegates to git"' \
+            "arch=('x86_64')" \
+            'url="https://github.com/risubrevis/gti"' \
+            'license=("MIT")' \
+            "depends=('gcc-libs')" \
+            '' \
+            'build() {' \
+            '  :' \
+            '}' \
+            '' \
+            'package() {' \
+            "  install -Dm755 \"${WORKSPACE}/target/release/gti\" \"\$pkgdir/usr/bin/gti\"" \
+            '}' \
+            > /tmp/gti-pkg/PKGBUILD
 
           chown -R builder:builder /tmp/gti-pkg
           chmod -R a+rX "${WORKSPACE}/target/release/gti"
