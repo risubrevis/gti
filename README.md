@@ -58,14 +58,39 @@ ln -s "$(pwd)/target/release/gti" ~/.local/bin/gti
 
 ### Pre-built Packages (GitHub Releases)
 
-Download the latest package for your platform from the [Releases page](https://github.com/risubrevis/gti/releases):
+Download the latest package for your platform from the [Releases page](https://github.com/risubrevis/gti/releases), then follow the instructions below.
 
-| Package | Platform |
-|---------|----------|
-| `.deb` | Debian / Ubuntu |
-| `.rpm` | Fedora / RHEL |
-| `.pkg.tar.zst` | Arch Linux |
-| `.tar.gz` | macOS (x86_64 & Apple Silicon) |
+#### Debian / Ubuntu (`.deb`)
+
+```bash
+sudo dpkg -i gti_*.deb
+# or if dependencies are missing:
+sudo apt-get install -f
+```
+
+#### Fedora / RHEL / openSUSE (`.rpm`)
+
+```bash
+sudo rpm -i gti-*.rpm
+```
+
+#### Arch Linux (`.pkg.tar.zst`)
+
+```bash
+sudo pacman -U gti-*.pkg.tar.zst
+```
+
+#### macOS (`.tar.gz`)
+
+1. Download the appropriate archive for your Mac (Intel or Apple Silicon).
+2. Extract and move the binary into a directory in your `$PATH`:
+
+```bash
+tar xzf gti-*-macos-*.tar.gz
+mv gti /usr/local/bin/   # or ~/.local/bin/
+```
+
+> **Note:** macOS Gatekeeper may block unsigned binaries. If prompted, go to **System Settings → Privacy & Security** and click **Allow Anyway**.
 
 ---
 
